@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不気味なカウントダウン</title>
+    <!-- Tailwind CSSを読み込み、スタイリングに使用 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 不気味な雰囲気を出すためのGoogle Fonts「Nosifier」を読み込み -->
+    <link href="https://fonts.googleapis.com/css2?family=Nosifier&display=swap" rel="stylesheet">
+    <!-- 音声合成のためのTone.jsライブラリを読み込み -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        /* 全体のフォント、背景色、文字色、配置を設定 */
+        body {
+            font-family: 'Nosifier', cursive; /* Nosifier フォント */
+            background-color: #0d0d0d;
+            color: #cc0000; /* 文字色を深い赤に変更 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 101vh;
+            margin: 0;
+            overflow-x: hidden;
+            text-shadow: 0 0 3px #ff0000, 0 0 6px #800000; /* 発光をさらに抑える */
+        }
+        /* コンテナのスタイル設定 */
+        .container {
+            text-align: center;
+            padding: 1.5rem;
+            max-width: 90vw;
+            border-radius: 10px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 1.5s ease-out, transform 1.5s ease-out;
+        }
+        /* スクロールで表示された時のスタイル */
+        .container.revealed {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        /* カウントダウン表示のスタイル設定 */
+        #countdown {
+            font-size: clamp(1rem, 6vw, 3rem);
+            margin-bottom: 1rem;
+            line-height: 1;
+            letter-spacing: 0.05em; /* 文字間隔を調整しすぎないように */
+            animation: flicker 1.5s infinite alternate;
+            font-weight: bold;
+            display: flex; /* 各数字と単位をフレックスアイテムとして扱う */
+            justify-content: center; /* 中央揃え */
+            flex-wrap: nowrap; /* 折り返しを禁止 */
+            align-items: baseline; /* ベースラインで揃える */
+            height: 1.2em; /* カウントダウン全体が崩れないように高さを確保 */
+        }
+        /* カウントダウンの個々の要素（数字や単位）のスタイル */
+        #countdown span {
+            position: relative; /* transformを適用するために必要 */
+            display: inline-block; /* transformを適用するために必要 */
+            transition: transform 0.1s ease-out; /* わずかな動きを滑らかに */
+        }
+        /* メッセージコンテナのスタイル設定 */
+        #message-container {
+            font-size: clamp(0.7rem, 2.5vw, 1.5rem);
+            color: #a00000; /* メッセージは少し暗めの赤に変更 */
+            margin-top: 0.8rem;
+            line-height: 1.3;
+            font-weight: normal;
+        }
+        #message-container span {
+            display: block;
+            margin-top: 0.4rem;
+        }
+        /* 音声再生ボタンのスタイル設定 */
+        #audioButton {
+            background-color: #800000; /* 暗めの赤色ボタン */
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border: 2px solid #cc0000; /* ボタンの境界線 */
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Nosifier', cursive; /* Nosifier フォントに変更 */
+            font-size: 1rem;
+            margin-top: 1.5rem;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+            box-shadow: 0 0 4px #ff0000; /* 発光をさらに抑える */
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 1.5s ease-out 0.5s, transform 1.5s ease-out 0.5s;
+        }
+        /* 音声再生ボタンのホバー時のスタイル設定 */
+        #audioButton:hover {
+            background-color: #cc0000;
+            border-color: #ff0000;
+            box-shadow: 0 0 6px #ff0000; /* 発光をさらに抑える */
+        }
+
+        /* 新しいボタンのスタイル設定 */
+        #generateMessageButton {
+            background-color: #300000; /* さらに暗い赤色ボタン */
+            color: #ffcccc; /* 薄い赤色の文字 */
+            padding: 0.8rem 1.5rem;
+            border: 2px solid #cc0000;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Nosifier', cursive; /* Nosifier フォントに変更 */
+            font-size: 1.2rem;
+            margin-top: 2rem; /* 音声ボタンとの間隔 */
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+            box-shadow: 0 0 5px #ff0000; /* 発光をさらに抑える */
+            opacity: 0; /* 初期状態では非表示 */
+            transform: translateY(20px);
+            transition: opacity 1.5s ease-out 1s, transform 1.5s ease-out 1s; /* 音声ボタンよりさらに遅れて表示 */
+        }
+
+        #generateMessageButton:hover {
+            background-color: #cc0000;
+            border-color: #ff0000;
+            box-shadow: 0 0 8px #ff0000; /* 発光をさらに抑える */
+        }
+
+        /* 生成されたメッセージ表示エリアのスタイル */
+        #generatedMessageContainer {
+            margin-top: 2rem;
+            font-size: clamp(0.8rem, 3.5vw, 1.8rem);
+            color: #ffaaaa; /* 生成されたメッセージは少し明るめの赤 */
+            max-width: 80vw;
+            line-height: 1.5;
+            min-height: 2em; /* コンテンツがないときに高さがゼロにならないように */
+            opacity: 0; /* 初期状態では非表示 */
+            transform: translateY(20px);
+            transition: opacity 1s ease-out, transform 1s ease-out;
+            text-shadow: 0 0 3px #ff0000, 0 0 6px #800000; /* 発光をさらに抑える */
+        }
+
+        /* ローディングインジケーターのスタイル */
+        #loadingIndicator {
+            margin-top: 1rem;
+            color: #ffaaaa;
+            font-size: 1.2rem;
+            animation: pulse 1.5s infinite alternate; /* 点滅アニメーション */
+        }
+
+        /* 文字の点滅アニメーションのキーフレーム */
+        @keyframes flicker {
+            0% { opacity: 1; text-shadow: 0 0 3px #ff0000, 0 0 6px #800000; } /* 発光をさらに抑える */
+            50% { opacity: 0.9; text-shadow: 0 0 2px #ff0000, 0 0 4px #800000; } /* 発光をさらに抑える */
+            100% { opacity: 1; text-shadow: 0 0 3px #ff0000, 0 0 6px #800000; } /* 発光をさらに抑える */
+        }
+
+        /* ローディングインジケーターの点滅アニメーション */
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="selection:bg-red-900 selection:text-white">
+    <div class="container flex flex-col items-center justify-center">
+        <!-- カウントダウン表示エリア -->
+        <div id="countdown" class="font-extrabold"></div>
+        <!-- メッセージ表示エリア -->
+        <div id="message-container" class="mt-4 text-center text-lg md:text-xl lg:text-2xl leading-relaxed">
+            <span>新宿</span>
+            <span>#謎のQR</span>
+        </div>
+    </div>
+    <!-- 音声再生ボタン -->
+    <button id="audioButton">音を再生する</button>
+    <!-- 謎のメッセージ生成ボタン -->
+    <button id="generateMessageButton">✨謎のメッセージを生成✨</button>
+    <!-- 生成されたメッセージ表示エリア -->
+    <div id="generatedMessageContainer"></div>
+    <!-- ローディングインジケーター -->
+    <div id="loadingIndicator" style="display: none;">生成中...</div>
+
+    <script>
+        // 目標日時を設定 (例: 2025年11月28日 00:00:00 JST)
+        const targetDate = new Date('November 28, 2025 00:00:00 GMT+0900');
+        const countdownElement = document.getElementById('countdown');
+
+        /**
+         * カウントダウンを更新する関数
+         */
+        function updateCountdown() {
+            const now = new Date().getTime();
+            const distance = targetDate - now;
+
+            if (distance < 0) {
+                countdownElement.innerHTML = "終わりが来た...";
+                return;
+            }
+
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            const countdownParts = [];
+
+            // 各数値と単位を個別のspan要素に分割し、ランダムな位置と回転を適用
+            const formatPart = (value, unit) => {
+                const chars = String(value).padStart(2, '0').split(''); // 2桁表示を保証
+                chars.forEach(char => {
+                    const xOffset = (Math.random() * 10 - 5); // -5px から +5px
+                    const yOffset = (Math.random() * 10 - 5);
+                    const rotation = (Math.random() * 8 - 4); // -4度 から +4度
+                    countdownParts.push(`<span style="transform: translate(${xOffset}px, ${yOffset}px) rotate(${rotation}deg);">${char}</span>`);
+                });
+                const xOffsetUnit = (Math.random() * 8 - 4);
+                const yOffsetUnit = (Math.random() * 8 - 4);
+                const rotationUnit = (Math.random() * 6 - 3);
+                // 単位の後ろに少しマージンを追加して区切る
+                countdownParts.push(`<span style="margin-right: 0.5em; transform: translate(${xOffsetUnit}px, ${yOffsetUnit}px) rotate(${rotationUnit}deg);">${unit}</span>`);
+            };
+
+            // 各パートを整形して追加
+            formatPart(days, '日');
+            formatPart(hours, '時間');
+            formatPart(minutes, '分');
+            formatPart(seconds, '秒');
+
+            countdownElement.innerHTML = countdownParts.join('');
+        }
+
+        setInterval(updateCountdown, 1000);
+        updateCountdown(); // 初期表示
+
+        // Tone.jsで不気味なアンビエントサウンドを生成する部分 (変更なし)
+        let droneSynth;
+        const audioButton = document.getElementById('audioButton');
+
+        audioButton.addEventListener('click', async () => {
+            await Tone.start();
+            console.log('オーディオコンテキストが開始されました。');
+
+            if (!droneSynth) {
+                droneSynth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "sine" },
+                    envelope: {
+                        attack: 2, decay: 0.1, sustain: 0.9, release: 5
+                    },
+                    volume: -20
+                });
+
+                const reverb = new Tone.Reverb({ decay: 5, wet: 0.7 }).toDestination();
+                const filter = new Tone.Filter({ type: "lowpass", frequency: 300, rolloff: -24 }).toDestination();
+                droneSynth.chain(filter, reverb, Tone.Destination);
+
+                droneSynth.triggerAttackRelease(["C2", "G2", "C3"], "8n", Tone.now());
+                droneSynth.triggerAttackRelease(["C2", "G2", "C3"], "infinity");
+                
+                const lfo = new Tone.LFO(0.05, -5, 5).connect(droneSynth.detune).start();
+            }
+            audioButton.style.display = 'none';
+        });
+
+        // Gemini API 呼び出し部分
+        const generateMessageButton = document.getElementById('generateMessageButton');
+        const generatedMessageContainer = document.getElementById('generatedMessageContainer');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        generateMessageButton.addEventListener('click', async () => {
+            generatedMessageContainer.style.opacity = '0'; // 古いメッセージをフェードアウト
+            generatedMessageContainer.style.transform = 'translateY(20px)';
+            loadingIndicator.style.display = 'block'; // ローディング表示
+
+            const prompt = "不明なイベントへのカウントダウン、謎のQRコード、新宿という場所に関連する、短く、不可解で、不吉なメッセージを日本語で作成してください。不気味なテーマに沿ってください。";
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = { contents: chatHistory };
+            const apiKey = ""; // APIキーはCanvasランタイムが自動的に提供
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            let retries = 0;
+            const maxRetries = 5;
+            let delay = 1000; // 1秒から開始
+
+            while (retries < maxRetries) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429) { // Rate limit exceeded
+                            retries++;
+                            await new Promise(res => setTimeout(res, delay));
+                            delay *= 2; // 指数関数的バックオフ
+                            continue; // リトライ
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        generatedMessageContainer.textContent = text;
+                        generatedMessageContainer.style.opacity = '1'; // 新しいメッセージをフェードイン
+                        generatedMessageContainer.style.transform = 'translateY(0)';
+                    } else {
+                        generatedMessageContainer.textContent = "メッセージの生成に失敗しました。";
+                        generatedMessageContainer.style.opacity = '1';
+                        generatedMessageContainer.style.transform = 'translateY(0)';
+                    }
+                    break; // 成功したらループを抜ける
+                } catch (error) {
+                    console.error("Failed to fetch from Gemini API:", error);
+                    generatedMessageContainer.textContent = "メッセージの生成中にエラーが発生しました。";
+                    generatedMessageContainer.style.opacity = '1';
+                    generatedMessageContainer.style.transform = 'translateY(0)';
+                    break; // エラーが発生したらリトライせずにループを抜ける
+                } finally {
+                    loadingIndicator.style.display = 'none'; // ローディング表示を隠す
+                }
+            }
+        });
+
+        // Intersection Observer を使用してスクロールで要素を表示
+        window.onload = function() {
+            updateCountdown();
+
+            const container = document.querySelector('.container');
+            const audioBtn = document.getElementById('audioButton');
+            const generateMsgBtn = document.getElementById('generateMessageButton'); // 新しいボタン
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        container.classList.add('revealed');
+                        setTimeout(() => {
+                            audioBtn.classList.add('revealed');
+                        }, 500);
+                        setTimeout(() => { // 新しいボタンをさらに遅れて表示
+                            generateMsgBtn.classList.add('revealed');
+                        }, 1000); // 1秒遅延
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, {
+                threshold: 0.1
+            });
+
+            observer.observe(container);
+        };
+    </script>
+</body>
+</html>
